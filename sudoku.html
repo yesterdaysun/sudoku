@@ -5,11 +5,12 @@
     <title>Sudoku</title>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.13/lodash.min.js"></script>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.10/vue.js"></script>
+    <link type="text/css" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/css/bootstrap.min.css">
     <style>
-        .container {
+        .sudoku-container {
             display: flex;
             flex-wrap: wrap;
-            width: 280px;
+            width: 330px;
             margin-top: 10px;
         }
 
@@ -17,34 +18,53 @@
             display: flex;
             justify-content: space-around;
             align-items: center;
-            width: 25px;
-            height: 25px;
+            width: 35px;
+            height: 35px;
             border: 1px solid black;
             margin-right: -1px;
             margin-bottom: -1px;
             padding: 2px;
         }
 
-        .cell:nth-child(3n) {
+        .cell-highlight {
+            border: 4px solid red;
+        }
+
+        .cell:nth-child(3n+1) {
             margin-right: 0;
         }
 
-        .cell:nth-child(27n) {
-            margin-bottom: 0;
+        .legend {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            width: 35px;
+            height: 35px;
+            margin-right: -1px;
+            margin-bottom: -1px;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        .sudoku-row {
+            display: flex;
+        }
+
+        .sudoku-row:nth-child(3n+1) {
+            margin-bottom: 1px;
         }
 
         .original-number {
-            background-color: #eeeeee;
-            /*font-size: 30px;*/
-            /*font-weight: bold;*/
+            background-color: #d0cece;
+            font-weight: bold;
         }
 
         .unique-number {
-            background-color: #27e39f;
+            background-color: #e2efda;
         }
 
         .guess-number {
-            background-color: #ff7e00;
+            background-color: #fff2cc;
         }
 
         .candidate {
@@ -54,30 +74,75 @@
     </style>
 </head>
 <body>
-<div id="sudoku-demo" class="demo">
-    题目: <input type="text" v-model="text" size="60">
-    速度: <input type="text" v-model="speed">
-    <button @click="solve">
-        Solve
-    </button>
-    <div>
-        猜测次数: {{ this.guessCount }}
+<div id="sudoku" class="container">
+    <div class="row">
+        <div class="col-sm">
+            <h1>Sudoku</h1>
+        </div>
     </div>
-    <div>
-        填数次数: {{ this.count }}
-    </div>
-    <div class="container">
-        <template v-for="cell in _.flatten(grid)">
-            <div v-if="cell.value" class="cell" :class="cell.getType()">
-                {{ cell.value }}
+    <div class="row">
+        <div class="col-sm">
+            <div class="form-group">
+                <label>题目</label>
+                <input type="text" class="form-control" v-model="text">
             </div>
-            <div v-else class="cell" :class="cell.getType()">
-                <template v-for="n in cell.candidates">
-                    {{ n }}
-                </template>
+            <div class="form-group">
+                <label>速度</label>
+                <input type="text" class="form-control" v-model="speed">
             </div>
-        </template>
+            <button type="button" class="btn btn-primary" @click="solve">
+                Solve
+            </button>
+            <div>
+                猜测次数: {{ this.guessCount }}
+            </div>
+            <div>
+                填数次数: {{ this.count }}
+            </div>
+            <div v-if="grid!=null" class="sudoku-container">
+                <div class="sudoku-row">
+                    <div class="legend">
+                    </div>
+                    <div v-for="n in _.range(9)" class="legend">
+                        {{ n+1 }}
+                    </div>
+                </div>
+                <div v-for="r in _.range(9)" class="sudoku-row">
+                    <div class="legend">
+                        {{ String.fromCharCode(r+65) }}
+                    </div>
+                    <template v-for="c in _.range(9)">
+                        <div v-if="grid[r][c].value" class="cell" :class="[grid[r][c].getType(),{'cell-highlight':grid[r][c].highlight}]">
+                            {{ grid[r][c].value }}
+                        </div>
+                        <div v-else-if="grid[r][c].candidates.length==0" class="cell" style="background-color: red;color: white">
+                            X
+                        </div>
+                        <div v-else class="cell" :class="[grid[r][c].getType(),{'cell-highlight':grid[r][c].highlight}]">
+                            <template v-for="n in grid[r][c].candidates">
+                                {{ n }}
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm">
+            <div class="form-group">
+                <label>步骤</label>
+                <select size="2" class="form-control" style="height: 600px" :disabled="lockSteps" v-model="step" @change="showStep">
+                    <option v-for="step in steps" :value="step.id">
+                        {{ step.text }}
+                    </option>
+                </select>
+            </div>
+        </div>
     </div>
+    <div class="row">
+        <div class="col-sm">
+        </div>
+    </div>
+
 </div>
 <script type="text/javascript">
     function sleep(milliseconds) {
@@ -92,10 +157,28 @@
             this.value = null;
             this.candidates = [1, 2, 3, 4, 5, 6, 7, 8, 9];
             this.type = 0;
+            this.highlight = false;
         }
 
         getType() {
             return ["candidate", "original-number", "unique-number", "guess-number"][this.type];
+        }
+    }
+
+    class Step {
+        constructor(id, grid, index, value, text = null) {
+            this.id = id;
+            this.grid = _.cloneDeep(grid);
+            this.index = index;
+            this.value = value;
+            this.text = text;
+            if (!this.text) {
+                this.text = this.getText();
+            }
+        }
+
+        getText() {
+            return `[${this.id}] ${String.fromCharCode(this.index[0] + 65)}${this.index[1] + 1} => ${this.value}`;
         }
     }
 
@@ -159,25 +242,31 @@
     let sudoku = {
         text: "..53.....8......2..7..1.5..4....53...1..7...6..32...8..6.5....9..4....3......97..",
         speed: 100,
-        grid: [],
+        grid: null,
         count: 0,
         guessCount: 0,
+        steps: [],
+        lockSteps: true,
+        step: '',
         initGrid: function (text) {
             let nums = text.split("").map(n => n === '.' ? 0 : parseInt(n));
             if (nums.length !== 81) {
                 alert("题目错误!");
                 return;
             }
-            this.grid = [];
+            let grid = [];
             this.count = 0;
             this.guessCount = 0;
+            this.steps = [];
+            this.lockSteps = true;
             for (let r = 0; r < 9; r++) {
                 let row = [];
                 for (let c = 0; c < 9; c++) {
                     row.push(new Cell([r, c]))
                 }
-                this.grid.push(row);
+                grid.push(row);
             }
+            this.grid = grid;
             let i = 0;
             for (let r = 0; r < 9; r++) {
                 for (let c = 0; c < 9; c++) {
@@ -190,6 +279,10 @@
                     i++;
                 }
             }
+            this.addStep(null, null, "开局");
+        },
+        addStep: function (index, value, text = null) {
+            this.steps.unshift(new Step(this.steps.length, this.grid, index, value, text));
         },
         setValue: function (index, value, type = 2) {
             this.count += 1;
@@ -202,6 +295,9 @@
                 let validState = this.discardCandidates(region, [value], [this.getIndexKey(index)]);
                 valid = valid && validState;
             }
+            if (type !== 1) {
+                this.addStep(index, value);
+            }
             return valid;
         },
         SetValueAnimation: async function (index, value, type = 2) {
@@ -209,6 +305,9 @@
             let speed = parseInt(this.speed) || 100;
             await sleep(speed);
             return valid;
+        },
+        getCell: function (index) {
+            return this.grid[index[0]][index[1]];
         },
         getCells: function* () {
             for (let r = 0; r < 9; r++) {
@@ -263,11 +362,11 @@
             return valid;
         },
         isRegionSolved: function (region) {
-            let rest = region.reduce((m, p) => {
-                m.delete(p.value);
-                return m;
-            }, new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]));
-            return rest.size === 0
+            let rest = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            for (let cell of region) {
+                rest.delete(cell.value);
+            }
+            return rest.size === 0;
         },
         isAllSet: function () {
             return _.flatten(this.grid).every(cell => cell.value);
@@ -282,16 +381,16 @@
 
 
     let view = new Vue({
-        el: '#sudoku-demo',
+        el: '#sudoku',
         data: sudoku,
         methods: {
-            solveUniqueSolutions: function () {
+            solveUniqueSolutions: async function () {
                 if (this.isAllSet()) {
                     return true;
                 }
                 for (let finderCtor of FINDERS) {
                     let finder = new finderCtor(this);
-                    if (!finder.solve()) {
+                    if (!await finder.solve()) {
                         return null;
                     }
                     if (this.isAllSet()) {
@@ -301,7 +400,7 @@
                 return false;
             },
             dfs: async function () {
-                let state = this.solveUniqueSolutions();
+                let state = await this.solveUniqueSolutions();
                 if (state === null) {
                     return false;
                 }
@@ -316,8 +415,7 @@
                 this.guessCount += 1;
                 for (let n of bestCell.candidates) {
                     let old = _.cloneDeep(this.grid);
-                    let valid = await this.SetValueAnimation(bestCell.index, n, 3);
-                    if (!valid) {
+                    if (!await this.SetValueAnimation(bestCell.index, n, 3)) {
                         this.grid = old;
                         continue;
                     }
@@ -331,13 +429,22 @@
             solve: async function () {
                 this.initGrid(this.text);
 
-                if (!(await this.dfs())) {
+                if (!await this.dfs()) {
                     alert("Sudoku is wrong");
                     throw "Sudoku is wrong";
                 }
+                this.addStep(null, null, "结束");
+                this.lockSteps = false;
                 console.log(`Guess Count: ${this.guessCount}`);
                 console.log(`Point Count: ${this.count}`);
                 console.log(this.toPlainText());
+            },
+            showStep: function () {
+                let step = this.steps[this.steps.length - this.step - 1];
+                this.grid = step.grid;
+                if (step.index) {
+                    this.getCell(step.index).highlight = true;
+                }
             }
         }
     })
