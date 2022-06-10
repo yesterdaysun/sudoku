@@ -162,7 +162,7 @@
             </el-row>
         </el-main>
         <el-footer height="40px">
-            2015-2019 &copy; yesterdaysun
+            2015-2020 &copy; yesterdaysun
         </el-footer>
     </el-container>
 </div>
@@ -193,9 +193,15 @@
             this.grid = _.cloneDeep(grid);
             this.index = index;
             this.value = value;
-            this.text = text;
-            if (!this.text) {
+            this.text = "";
+            if (index != null) {
                 this.text = this.getText();
+            }
+            if (text != null) {
+                if (this.text) {
+                    this.text += " - ";
+                }
+                this.text += text;
             }
         }
 
@@ -230,7 +236,7 @@
     class UniqueCandidateFinder {
         constructor(sudoku) {
             this.sudoku = sudoku;
-            this.name = "UniqueCandidateFinder";
+            this.name = "唯一候选数法";
         }
 
         async solve() {
@@ -247,8 +253,8 @@
                     if (cell.candidates.length === 1) {
                         hasUniqueSolution = true;
                         let valid = this.sudoku.speed < 100 ?
-                            this.sudoku.setValue(cell.index, cell.candidates[0]) :
-                            await this.sudoku.setValueAnimation(cell.index, cell.candidates[0]);
+                            this.sudoku.setValue(cell.index, cell.candidates[0], 2, this.name) :
+                            await this.sudoku.setValueAnimation(cell.index, cell.candidates[0], 2, this.name);
                         if (!valid) {
                             return false;
                         }
@@ -309,7 +315,7 @@
         addStep: function (index, value, text = null) {
             this.steps.unshift(new Step(this.steps.length, this.grid, index, value, text));
         },
-        setValue: function (index, value, type = 2) {
+        setValue: function (index, value, type = 2, text) {
             this.count += 1;
             let cell = this.getCell(...index);
             cell.value = value;
@@ -321,12 +327,12 @@
                 valid = valid && validState;
             }
             if (type !== 1) {
-                this.addStep(index, value);
+                this.addStep(index, value, text);
             }
             return valid;
         },
-        setValueAnimation: async function (index, value, type = 2) {
-            let valid = this.setValue(index, value, type);
+        setValueAnimation: async function (index, value, type = 2, text) {
+            let valid = this.setValue(index, value, type, text);
             let speed = parseInt(this.speed) || 100;
             await sleep(speed);
             return valid;
@@ -441,7 +447,7 @@
                 let oldStep = _.first(this.steps);
                 for (let n of bestCell.candidates) {
                     let old = _.cloneDeep(this.grid);
-                    if (!await this.setValueAnimation(bestCell.index, n, 3)) {
+                    if (!await this.setValueAnimation(bestCell.index, n, 3, "猜测回溯法")) {
                         this.grid = old;
                         this.addStep(null, null, `冲突, 退回步骤 ${oldStep.id}`);
                         continue;
@@ -481,10 +487,8 @@
                 }
                 let index = _.indexOf(this.steps, this.step);
                 index += direction;
-                if (index < 0) {
+                if (index < 0 || index >= this.steps.length) {
                     index = 0;
-                } else if (index >= this.steps.length) {
-                    index = this.steps.length - 1
                 }
                 this.step = this.steps[index];
                 this.$refs.stepGrid.setCurrentRow(this.step);
